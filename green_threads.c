@@ -1,4 +1,6 @@
 #include <assert.h>
+#include <linux/sched.h>
+#include <linux/interrupt.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -6,6 +8,7 @@
 #include <inttypes.h>
 
 #define MAX_THREADS 4
+#define TIME 500
 
 static const int s_stack_size = 0x400000;
 static char *s_stack_to_free = NULL;
@@ -37,6 +40,22 @@ void gt_switch(struct gt_context *old, struct gt_context *new);
 bool gt_schedule();
 static void gt_stop();
 int gt_create(void (*function)());
+static irqreturn_t handle_interupt(int sig, void* dta, struct pt_regs *regs);
+
+static void set_timer_interupt(){
+    struct sigev = {SIGEV_SIGNAL, 0, NULL, NULL, NULL, 0};
+    timer_t *timer = malloc(sizeof(timer_t));
+    if (timer_create(CLOCK_REALTIME, sigev, timer)) {
+        //error handling
+    }
+    struct itimerspec t_spec = {{0,TIME}, {0,TIME}};
+    timer_settime(timer, 0, t_spec, NULL);
+}
+
+static irqreturn_t handle_interupt(int irq, void* dev_id, struct pt_regs *regs) {
+    printf("Caught the signal");
+    return IRQ_HANDLED;
+}
 
 void gt_init()
 {
@@ -137,6 +156,12 @@ void do_work()
 
 int main()
 {
+    if (request_irq(0, handle_interupt, SA_INTERUPT, "MYHANDLER", 0)) {
+        printf("Couldn't set handler");
+        exit(1);
+    }
+    set_timer_interupt();
+    while(1);
 	gt_init();
 	gt_create(do_work);
 	gt_create(do_work);
