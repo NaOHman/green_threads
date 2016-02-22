@@ -1,14 +1,16 @@
 #include <assert.h>
-#include <linux/sched.h>
-#include <linux/interrupt.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <signal.h>
+#include <stdio.h>
 #include <inttypes.h>
 
 #define MAX_THREADS 4
-#define TIME 500
+#define TIME 500000
+#define TIMERSIG SIGVTALRM
 
 static const int s_stack_size = 0x400000;
 static char *s_stack_to_free = NULL;
@@ -40,21 +42,9 @@ void gt_switch(struct gt_context *old, struct gt_context *new);
 bool gt_schedule();
 static void gt_stop();
 int gt_create(void (*function)());
-static irqreturn_t handle_interupt(int sig, void* dta, struct pt_regs *regs);
 
-static void set_timer_interupt(){
-    struct sigev = {SIGEV_SIGNAL, 0, NULL, NULL, NULL, 0};
-    timer_t *timer = malloc(sizeof(timer_t));
-    if (timer_create(CLOCK_REALTIME, sigev, timer)) {
-        //error handling
-    }
-    struct itimerspec t_spec = {{0,TIME}, {0,TIME}};
-    timer_settime(timer, 0, t_spec, NULL);
-}
-
-static irqreturn_t handle_interupt(int irq, void* dev_id, struct pt_regs *regs) {
-    printf("Caught the signal");
-    return IRQ_HANDLED;
+static void handler(int signo, siginfo_t *si, void *ctx) {
+    gt_schedule();
 }
 
 void gt_init()
@@ -66,6 +56,7 @@ void gt_init()
 void __attribute__((noreturn))
 gt_return(int exitValue)
 {
+    /*timer_settime(timer, 0, &t_val, NULL);*/
 	if (current_gt != &gt_table[0]) {
 		current_gt->state = Unused;
 		gt_schedule();
@@ -146,24 +137,28 @@ int gt_create(void (*function)())
 void do_work()
 {
 	static int x;
-
 	int id = ++x;
 	for (uint64_t i = 0; i < 10000000; i++) {
 		printf("%d %" PRIu64 "\n", id, i);
-		gt_schedule();
 	}
 }
 
 int main()
 {
-    if (request_irq(0, handle_interupt, SA_INTERUPT, "MYHANDLER", 0)) {
-        printf("Couldn't set handler");
-        exit(1);
-    }
-    set_timer_interupt();
-    while(1);
+    //setup timer interrupt handler
+    struct sigaction act = {
+        .sa_sigaction = handler,
+        .sa_flags = SA_NODEFER,
+    };
+    sigemptyset( &act.sa_mask );
+    sigaction(TIMERSIG, &act, NULL );
+
+    //Set the virtual timer to interrupt evert TIME nanoseconds
+    static const struct itimerval t_val = {{0,TIME}, {0, TIME},};
+    setitimer(ITIMER_VIRTUAL, &t_val, NULL);
+
 	gt_init();
 	gt_create(do_work);
 	gt_create(do_work);
-	gt_return(1);
+    gt_return(1);
 }
