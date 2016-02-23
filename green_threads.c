@@ -9,8 +9,7 @@
 #include <inttypes.h>
 
 #define MAX_THREADS 4
-#define TIME 500000
-#define TIMERSIG SIGVTALRM
+#define TIME 200000
 
 static const int s_stack_size = 0x400000;
 static char *s_stack_to_free = NULL;
@@ -56,7 +55,6 @@ void gt_init()
 void __attribute__((noreturn))
 gt_return(int exitValue)
 {
-    /*timer_settime(timer, 0, &t_val, NULL);*/
 	if (current_gt != &gt_table[0]) {
 		current_gt->state = Unused;
 		gt_schedule();
@@ -151,7 +149,7 @@ int main()
         .sa_flags = SA_NODEFER,
     };
     sigemptyset( &act.sa_mask );
-    sigaction(TIMERSIG, &act, NULL );
+    sigaction(SIGVTALRM, &act, NULL );
 
     //Set the virtual timer to interrupt evert TIME nanoseconds
     static const struct itimerval t_val = {{0,TIME}, {0, TIME},};
